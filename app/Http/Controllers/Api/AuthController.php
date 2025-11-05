@@ -10,58 +10,98 @@ use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
     public function __construct(private OtpService $otp) {}
 
     /** POST /api/v1/login */
-    public function login(LoginRequest $req)
+    public function login(Request $request)
     {
-        // You can support phone login later; here we use email+password
-        $creds = ['email' => $req->input('email'), 'password' => $req->input('password')];
+        $data = $request->validate([
+            // use one field for either email or reg_no (fallback to 'email' for backward compat)
+            'login'   => ['sometimes','string','max:255'],
+            'email'   => ['sometimes','string','max:255'], // deprecated: will be used only if 'login' absent
+            'password'=> ['required','string'],
+            'device'  => ['nullable','string','max:60'],
+            // optional tenant scoping if you need it (uncomment if applicable)
+            // 'tenant_id' => ['sometimes','integer','exists:tenants,id'],
+            // 'tenant_code' => ['sometimes','string','exists:tenants,code'],
+        ]);
 
-        if (!empty($req->phone)) {
-            // Optional: map phone → user email, or implement custom provider
-            $user = User::where('phone', $req->phone)->first();
-            if (!$user) return response()->json(['message'=>'Invalid credentials'], 422);
-            $creds['email'] = $user->email;
+        $identifier = $data['login'] ?? $data['email'] ?? null;
+        if (!$identifier) {
+            return response()->json(['message' => 'The login field is required.'], 422);
         }
 
-        if (!Auth::attempt(['email' => $creds['email'], 'password' => $creds['password']])) {
-            return response()->json(['message'=>'Invalid credentials'], 422);
+        // Optionally resolve tenant for scoping (uncomment if you want strict per-tenant auth)
+        // $tenant = null;
+        // if (!empty($data['tenant_id'])) {
+        //     $tenant = \App\Models\Tenant::find($data['tenant_id']);
+        // } elseif (!empty($data['tenant_code'])) {
+        //     $tenant = \App\Models\Tenant::where('code', $data['tenant_code'])->first();
+        // }
+
+        // Find user by email OR by student's reg_no
+        $userQuery = User::query()
+            ->when(str_contains($identifier, '@'), function ($q) use ($identifier) {
+                // Looks like an email → try direct email match first
+                $q->where('email', $identifier);
+            }, function ($q) use ($identifier) {
+                // Not an email → treat as reg_no on related Student
+                $q->whereHas('student', function ($s) use ($identifier) {
+                    $s->where('reg_no', $identifier);
+                });
+            });
+
+        // If you need tenant scoping, apply it (uncomment if you enabled the tenant block above)
+        // if ($tenant) {
+        //     $userQuery->where('tenant_id', $tenant->id);
+        // }
+
+        $user = $userQuery->first();
+
+        if (!$user || !Hash::check($data['password'], $user->password)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        $req->session()->regenerate();
+        // revoke old tokens for this device name if you want single-session per device
+        $deviceName = $data['device'] ?? 'web';
+        $user->tokens()->where('name', $deviceName)->delete();
+
+        $token = $user->createToken($deviceName, ['*'])->plainTextToken;
 
         return response()->json([
-            'message' => 'ok',
-            'user'    => [
-                'id'    => $req->user()->id,
-                'name'  => $req->user()->name,
-                'email' => $req->user()->email,
-                'tenant_id' => $req->user()->tenant_id,
-                'roles' => $req->user()->getRoleNames(),
+            'message'    => 'ok',
+            'token'      => $token,
+            'token_type' => 'Bearer',
+            'user'       => [
+                'id'        => $user->id,
+                'name'      => $user->name,
+                'email'     => $user->email,
+                'tenant_id' => $user->tenant_id,
+                'roles'     => method_exists($user, 'getRoleNames') ? $user->getRoleNames() : [],
             ],
         ]);
     }
 
+
     /** POST /api/v1/logout */
-    public function logout(Request $req)
+    public function logout(Request $request)
     {
-        Auth::guard('web')->logout();
-        $req->session()->invalidate();
-        $req->session()->regenerateToken();
-        return response()->json(['message'=>'ok']);
+        // revoke current token
+        $request->user()->currentAccessToken()->delete();
+        return response()->json(['message' => 'Logged out']);
     }
 
     /** POST /api/v1/otp/request  (channel, identifier, purpose) */
-    public function otpRequest(OtpRequestRequest $req)
+    public function otpRequest(OtpRequestRequest $request)
     {
         $this->otp->request(
-            $req->channel,
-            $req->identifier,
-            $req->purpose,
+            $request->channel,
+            $request->identifier,
+            $request->purpose,
             ttlMinutes: (int) (config('auth.otp_ttl', 10)),
             digits: (int) (config('auth.otp_digits', 6))
         );
@@ -70,18 +110,23 @@ class AuthController extends Controller
     }
 
     /** POST /api/v1/otp/verify  (channel, identifier, purpose, code) */
-    public function otpVerify(OtpVerifyRequest $req)
+    public function otpVerify(OtpVerifyRequest $request)
     {
         $ok = $this->otp->verify(
-            $req->channel,
-            $req->identifier,
-            $req->purpose,
-            $req->code,
+            $request->channel,
+            $request->identifier,
+            $request->purpose,
+            $request->code,
             maxAttempts: (int) (config('auth.otp_max_attempts', 5))
         );
 
         return $ok
             ? response()->json(['message'=>'verified'])
-            : response()->json(['message'=>'invalid_or_expired_code'], 422);
+            : response()->json(['message'=>'invalid_or_expired_code'], 401);
+    }
+
+    public function me(Request $request)
+    {
+        return response()->json($request->user());
     }
 }

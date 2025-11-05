@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\{Tenant, User};
+use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 
 class RolesAndAdminSeeder extends Seeder
@@ -17,8 +18,8 @@ class RolesAndAdminSeeder extends Seeder
 
         $admin = User::firstOrCreate(['email'=>'admin@demo.test'], [
             'name'=>'Demo Admin',
-            'password'=>bcrypt('Password!234'),
-            'tenant_id'=>null // SuperAdmin can be global
+            'password'=>Hash::make('Password!234'),
+            'tenant_id'=> $tenant->id // SuperAdmin can be global
         ]);
         $admin->assignRole('SuperAdmin');
     }

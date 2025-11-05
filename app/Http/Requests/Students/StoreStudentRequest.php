@@ -26,6 +26,11 @@ class StoreStudentRequest extends FormRequest
             'branch' => ['nullable','string'],
             'cohort' => ['nullable','string'],
             'meta'   => ['nullable','array'],
+
+            'user' => ['required','array'],
+            'user.name' => ['required','string','min:2'],
+            'user.email' => ['required','email','max:255','unique:users,email'],
+            'user.phone' => ['nullable','string','max:30'],
         ];
     }
 }

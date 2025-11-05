@@ -3,64 +3,129 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use App\Models\{Tenant, User, Student, Module, Assessment, Question, Option};
+use Illuminate\Support\Facades\Hash;
 
 class DemoContentSeeder extends Seeder
 {
     public function run(): void
     {
-        $tenant = Tenant::firstOrCreate(['code'=>'demo'],['name'=>'Demo College']);
+        DB::transaction(function () {
 
-        // College admin within tenant
-        $admin = User::firstOrCreate(['email'=>'admin@college.test'], [
-            'name'=>'College Admin',
-            'password'=>bcrypt('Password!234'),
-            'tenant_id'=>$tenant->id
-        ]);
-        $admin->assignRole('CollegeAdmin');
+            // --- Tenant ---
+            $tenant = Tenant::firstOrCreate(
+                ['code' => 'demo'],
+                ['name' => 'Demo College']
+            );
 
-        // Students
-        foreach (range(1,10) as $i) {
-            Student::firstOrCreate([
-                'tenant_id'=>$tenant->id,
-                'reg_no'=>"REG-{$i}"
-            ], [
-                'branch'=>'Main', 'cohort'=>'2025'
-            ]);
-        }
+            // --- Admin user within tenant ---
+            $admin = User::firstOrCreate(
+                ['email' => 'admin@college.test'],
+                [
+                    'name'      => 'College Admin',
+                    'password'  => Hash::make('Password!234'),
+                    'tenant_id' => $tenant->id,
+                ]
+            );
+            // assign role if spatie/laravel-permission is present
+            if (method_exists($admin, 'assignRole')) {
+                $admin->assignRole('CollegeAdmin');
+            }
 
-        // Module
-        $module = Module::firstOrCreate([
-            'tenant_id'=>$tenant->id, 'title'=>'Aptitude Basics'
-        ], [
-            'per_student_time_limit_min'=>30
-        ]);
+            // --- Students + their Users (linked via user_id) ---
+            foreach (range(1, 10) as $i) {
+                $email = "student{$i}@college.test";
+                $name  = "Student {$i}";
 
-        // Assessment (MCQ)
-        $ass = Assessment::firstOrCreate([
-            'tenant_id'=>$tenant->id,
-            'module_id'=>$module->id,
-            'type'=>'MCQ',
-            'title'=>'Aptitude Test – Set A'
-        ], [
-            'instructions'=>'Pick the correct answer',
-            'total_marks'=>10
-        ]);
+                // create/find the student "user"
+                $studentUser = User::firstOrCreate(
+                    ['email' => $email],
+                    [
+                        'name'      => $name,
+                        'password'  => Hash::make('Password!234'),
+                        'tenant_id' => $tenant->id,
+                    ]
+                );
+                if (method_exists($studentUser, 'assignRole')) {
+                    $studentUser->assignRole('Student');
+                }
 
-        // Questions
-        foreach (range(1,10) as $n) {
-            $q = Question::create([
-                'tenant_id'=>$tenant->id,
-                'assessment_id'=>$ass->id,
-                'type'=>'MCQ',
-                'stem'=>"What is {$n}+{$n}?",
-                'difficulty'=>'easy',
-                'topic'=>'math',
-                'tags'=>['demo','sum']
-            ]);
-            Option::create(['question_id'=>$q->id,'label'=> (string)($n+$n),'is_correct'=>true]);
-            Option::create(['question_id'=>$q->id,'label'=> (string)($n+$n+1),'is_correct'=>false]);
-            Option::create(['question_id'=>$q->id,'label'=> (string)($n+$n-1),'is_correct'=>false]);
-        }
+                // create/find the Student model linked to that user
+                $regNo = sprintf('REG-%03d', $i);
+                Student::firstOrCreate(
+                    [
+                        'tenant_id' => $tenant->id,
+                        'user_id'   => $studentUser->id, // <— link!
+                    ],
+                    [
+                        'reg_no' => $regNo,
+                        'branch' => 'Main',
+                        'cohort' => '2025',
+                    ]
+                );
+            }
+
+            // --- Module ---
+            $module = Module::firstOrCreate(
+                [
+                    'tenant_id' => $tenant->id,
+                    'title'     => 'Aptitude Basics',
+                ],
+                [
+                    'per_student_time_limit_min' => 30,
+                ]
+            );
+
+            // --- Assessment (MCQ) ---
+            $ass = Assessment::firstOrCreate(
+                [
+                    'tenant_id' => $tenant->id,
+                    'module_id' => $module->id,
+                    'type'      => 'MCQ',
+                    'title'     => 'Aptitude Test – Set A',
+                ],
+                [
+                    'instructions' => 'Pick the correct answer',
+                    'total_marks'  => 10,
+                ]
+            );
+
+            // --- Questions + Options (idempotent) ---
+            foreach (range(1, 10) as $n) {
+                $stem = "What is {$n}+{$n}?";
+
+                $q = Question::firstOrCreate(
+                    [
+                        'tenant_id'     => $tenant->id,
+                        'assessment_id' => $ass->id,
+                        'stem'          => $stem,
+                    ],
+                    [
+                        'type'       => 'MCQ',
+                        'difficulty' => 'easy',
+                        'topic'      => 'math',
+                        'tags'       => ['demo', 'sum'],
+                    ]
+                );
+
+                // correct
+                Option::firstOrCreate(
+                    ['question_id' => $q->id, 'label' => (string)($n + $n)],
+                    ['is_correct' => true]
+                );
+
+                // distractors
+                Option::firstOrCreate(
+                    ['question_id' => $q->id, 'label' => (string)($n + $n + 1)],
+                    ['is_correct' => false]
+                );
+                Option::firstOrCreate(
+                    ['question_id' => $q->id, 'label' => (string)($n + $n - 1)],
+                    ['is_correct' => false]
+                );
+            }
+        });
     }
 }
