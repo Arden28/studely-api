@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use App\Models\{
     Tenant, User, Student, Assessment, College, Module, Question, Option
 };
+use Faker\Factory;
 
 class DemoContentSeeder extends Seeder
 {
@@ -16,7 +17,7 @@ class DemoContentSeeder extends Seeder
     {
         DB::transaction(function () {
             // Create a Faker instance (avoid the undefined fake() helper)
-            $faker = \Faker\Factory::create('en_IN');
+            $faker = Factory::create('en_IN');
 
             // --- Tenant ---
             $tenant = Tenant::firstOrCreate(
