@@ -23,7 +23,14 @@ class StudentResource extends JsonResource
             'branch'  => $this->branch,
             'cohort'  => $this->cohort,
             'meta'    => $this->meta,
+            'institution_name'    => $this->institution_name,
+            'university_name'    => $this->college?->name ?? null,
+            'gender'    => $this->gender,
+            'dob'    => $this->dob,
+            'admission_year'    => $this->admission_year,
+            'current_semester'    => $this->current_semester,
             'tenant_id' => $this->tenant_id,
+            'college_id' => $this->college_id,
             'created_at' => $this->created_at,
         ];
     }

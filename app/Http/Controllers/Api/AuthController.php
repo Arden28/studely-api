@@ -6,15 +6,156 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\OtpRequestRequest;
 use App\Http\Requests\Auth\OtpVerifyRequest;
+use App\Http\Requests\Auth\RegisterCompleteRequest;
+use App\Http\Requests\Auth\RegisterInitRequest;
+use App\Models\Student;
 use App\Models\User;
 use App\Services\OtpService;
+use App\Services\Auth\RegistrationCache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class AuthController extends Controller
 {
-    public function __construct(private OtpService $otp) {}
+    public function __construct(private OtpService $otp, private RegistrationCache $regCache) {}
+
+    /** POST /api/v1/register/init */
+    public function registerInit(RegisterInitRequest $request)
+    {
+        $data = $request->validated();
+
+        // Safety checks: no duplicate verified account by email/phone/reg_no
+        if (User::where('email', $data['email'])->whereNotNull('registered_at')->exists()) {
+            return response()->json(['message'=>'An account with this email already exists.'], 422);
+        }
+        if (User::where('phone', $data['mobile'])->whereNotNull('registered_at')->exists()) {
+            return response()->json(['message'=>'An account with this mobile already exists.'], 422);
+        }
+        if (Student::where('reg_no', $data['reg_no'])->exists()) {
+            // you may allow multiple attempts before verification; block only if linked user is registered
+            // optional strictness here
+        }
+
+        // Store pending payload (hash password here; never keep plain text)
+        $payload = [
+            'user' => [
+                'name'  => $data['full_name'],
+                'email' => $data['email'],
+                'phone' => $data['mobile'],
+                'password_hash' => Hash::make($data['password']),
+            ],
+            'student' => [
+                // 'full_name'        => $data['full_name'],
+                'institution_name' => $data['institution_name'],
+                'university_name'  => $data['university_name'],
+                'gender'           => $data['gender'],
+                'dob'              => $data['dob'],
+                'admission_year'   => $data['admission_year'],
+                'current_semester' => $data['current_semester'],
+                'reg_no'           => $data['reg_no'],
+            ],
+        ];
+
+        $this->regCache->put($data['email'], $payload, (int)config('auth.otp_ttl', 10));
+
+        // Send OTP to mobile
+        $this->otp->request(
+            channel: 'email',
+            identifier: $data['email'],
+            purpose: 'register',
+            ttlMinutes: (int)config('auth.otp_ttl', 10),
+            digits: (int)config('auth.otp_digits', 6)
+        );
+
+        return response()->json(['message' => 'otp_sent']);
+    }
+
+    /** POST /api/v1/register/complete */
+    public function registerComplete(RegisterCompleteRequest $request)
+    {
+        // $mobile = $request->validated()['mobile'];
+        $email = $request->validated()['email'];
+        $otp    = $request->validated()['otp'];
+
+        $verified = $this->otp->verify(
+            channel: 'email',
+            identifier: $email,
+            purpose: 'register',
+            code: $otp,
+            maxAttempts: (int)config('auth.otp_max_attempts', 5)
+        );
+
+        if (! $verified) {
+            return response()->json(['message' => 'invalid_or_expired_code'], 401);
+        }
+
+        $payload = $this->regCache->get($email);
+        if (!$payload) {
+            return response()->json(['message' => 'registration_session_expired'], 410);
+        }
+
+        DB::beginTransaction();
+        try {
+            // 1) Create the user (fail if email/phone already taken)
+            $user = User::create([
+                'tenant_id'         => 1,
+                'name'              => $payload['user']['name'],
+                'email'             => $payload['user']['email'],
+                'phone'             => $payload['user']['phone'],
+                'password'          => $payload['user']['password_hash'],
+                'email_verified_at' => now(),   // only set here if OTP already verified
+                'registered_at'     => now(),
+            ]);
+
+            // 2) Create the student profile (one-to-one)
+            $user->student()->create([
+                'tenant_id'            => 1,
+                'reg_no'               => $payload['student']['reg_no'],
+                'institution_name'     => $payload['student']['institution_name'],
+                'university_name'      => $payload['student']['university_name'],
+                'gender'               => $payload['student']['gender'],
+                'dob'                  => $payload['student']['dob'],
+                'admission_year'       => $payload['student']['admission_year'],
+                'current_semester'     => $payload['student']['current_semester'],
+            ]);
+
+            // 3) Optional role
+            if (method_exists($user, 'assignRole')) {
+                $user->assignRole('Student');
+            }
+
+            DB::commit();
+            $this->regCache->forget($email);
+
+            // Auto-login on success
+            $token = $user->createToken('web', ['*'])->plainTextToken;
+
+            return response()->json([
+                'message'    => 'Congratulations! You have been onboarded to "The Launchpad".',
+                'token'      => $token,
+                'token_type' => 'Bearer',
+                'user'       => [
+                    'id'        => $user->id,
+                    'name'      => $user->name,
+                    'email'     => $user->email,
+                    'tenant_id' => $user->tenant_id,
+                    'role'      => method_exists($user, 'getRoleNames') ? $user->getRoleNames()->first() : null,
+                ],
+            ], 201);
+        } catch (Throwable $e) {
+            Log::error('Register complete failed', [
+                'email' => $email,
+                'error'  => $e->getMessage(),
+                'trace'  => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => 'registration_failed'], 500);
+        }
+    }
+
 
     /** POST /api/v1/login */
     public function login(Request $request)
@@ -64,6 +205,14 @@ class AuthController extends Controller
 
         if (!$user || !Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        $firstRole = $user->getRoleNames()->first();
+
+        if (!in_array($firstRole, ['SuperAdmin', 'Evaluator']) && (blank($user->registered_at) || blank($user->email_verified_at))) {
+            return response()->json([
+                'message' => 'Please complete registration before logging in.',
+            ], 403);
         }
 
         // revoke old tokens for this device name if you want single-session per device

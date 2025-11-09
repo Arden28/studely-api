@@ -11,14 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('assessments', function (Blueprint $table) {
+        Schema::create('colleges', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained();
-            $table->enum('type',['MCQ','RUBRIC'])->default('MCQ');
-            $table->string('title');
-            $table->text('instructions')->nullable();
-            $table->integer('total_marks')->default(0);
-            $table->boolean('is_active')->default(true);
+            $table->string('name');
+            $table->string('code')->nullable();
+            $table->string('location')->nullable();
+            $table->text('description')->nullable();
             $table->timestamps();
         });
     }
@@ -28,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('assessments');
+        Schema::dropIfExists('colleges');
     }
 };

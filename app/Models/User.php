@@ -19,7 +19,7 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
-    protected $fillable = ['name','email','phone','password','tenant_id'];
+    protected $fillable = ['name','email','phone','password','tenant_id', 'registered_at', 'email_verified_at'];
 
     public function tenant(){
          return $this->belongsTo(Tenant::class);
@@ -48,6 +48,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

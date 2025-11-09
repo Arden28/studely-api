@@ -8,8 +8,8 @@ return new class extends Migration {
         Schema::create('questions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained();
-            $table->foreignId('assessment_id')->nullable()->constrained();
-            $table->enum('type',['MCQ','OPEN']);
+            $table->foreignId('module_id')->constrained()->cascadeOnDelete();
+            $table->enum('type',['MCQ','OPEN'])->default('MCQ');
             $table->text('stem');
             $table->string('difficulty')->nullable();
             $table->string('topic')->nullable();

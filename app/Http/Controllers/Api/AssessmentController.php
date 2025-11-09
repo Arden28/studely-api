@@ -14,8 +14,8 @@ class AssessmentController extends Controller
     public function index(Request $r)
     {
         $tid = app('tenant.id');
-        $q = Assessment::where('tenant_id',$tid)->withCount('questions')->latest();
-        if ($r->filled('module_id')) $q->where('module_id',$r->module_id);
+        $q = Assessment::where('tenant_id',$tid)->withCount('modules')->latest();
+        // if ($r->filled('module_id')) $q->where('module_id',$r->module_id);
         return AssessmentResource::collection($q->paginate(20));
     }
 

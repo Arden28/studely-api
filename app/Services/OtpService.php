@@ -37,7 +37,7 @@ class OtpService
         }
         // For email channel, you can integrate Mail later. For dev, log it:
         if ($channel === 'email') {
-            logger()->info("OTP for {$identifier}: {$code}");
+            logger()->info("OTP for {$identifier}: {$code}. It expires in {$ttlMinutes} minutes.");
         }
     }
 

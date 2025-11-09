@@ -10,7 +10,7 @@ class Module extends Model
     use HasFactory;
 
     protected $fillable = [
-        'tenant_id','title','code','start_at','end_at','per_student_time_limit_min','order'
+        'tenant_id', 'assessment_id','title','code','start_at','end_at','per_student_time_limit_min','order', 'status'
     ];
     protected $casts = [
         'start_at'=>'datetime',
@@ -21,8 +21,9 @@ class Module extends Model
          return $this->belongsTo(Tenant::class);
     }
 
-    public function assessments(){
-         return $this->hasMany(Assessment::class);
+    public function assessment()
+    {
+        return $this->belongsTo(Assessment::class);
     }
 
 }

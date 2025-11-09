@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\{
   AuthController, OtpController, TenantController, StudentController, StudentImportController,
   ModuleController, AssessmentController, QuestionController, QuestionOptionController,
-  AttemptController, EvaluationController, ReportController,
+  AttemptController, CollegeController, EvaluationController, ReportController,
     RubricController
 };
 use App\Http\Middleware\ScopeTenant;
@@ -13,6 +13,8 @@ Route::prefix('v1')->group(function () {
     // Auth
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+    Route::post('/register/init', [AuthController::class, 'registerInit']);
+    Route::post('/register/complete', [AuthController::class, 'registerComplete']);
     Route::post('/otp/request', [AuthController::class, 'otpRequest']);
     Route::post('/otp/verify', [AuthController::class, 'otpVerify']);
 
@@ -23,6 +25,9 @@ Route::prefix('v1')->group(function () {
 
         // Tenants (SuperAdmin only)
         Route::apiResource('tenants', TenantController::class)->middleware('role:SuperAdmin');
+
+        // Colleges
+        Route::apiResource('colleges', CollegeController::class);
 
         // Students
         Route::get('students', [StudentController::class, 'index']);

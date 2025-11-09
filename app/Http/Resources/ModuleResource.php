@@ -16,13 +16,16 @@ class ModuleResource extends JsonResource
     {
         return [
             'id'      => $this->id,
+            'assessment_title'   => $this->assessment?->title ?? null,
             'title'   => $this->title,
             'code'    => $this->code,
             'start_at'=> optional($this->start_at)->toISOString(),
             'end_at'  => optional($this->end_at)->toISOString(),
             'time_limit_min' => $this->per_student_time_limit_min,
             'order'   => $this->order,
-            'assessments_count' => $this->whenCounted('assessments'),
+            'assessment'   => $this->assessment,
+            'questions'    => QuestionResource::collection($this->whenLoaded('questions')),
+            'status'   => $this->status,
         ];
     }
 }

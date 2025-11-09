@@ -16,13 +16,13 @@ class AssessmentResource extends JsonResource
     {
         return [
             'id'    => $this->id,
-            'module_id' => $this->module_id,
             'type'  => $this->type,
             'title' => $this->title,
             'instructions' => $this->instructions,
             'total_marks'  => $this->total_marks,
             'is_active'    => $this->is_active,
-            'questions'    => QuestionResource::collection($this->whenLoaded('questions')),
+            'modules'    => ModuleResource::collection($this->whenLoaded('modules')),
+            'modules_count' => $this->modules()->count(),
             'rubric'       => new RubricResource($this->whenLoaded('rubric')),
         ];
     }

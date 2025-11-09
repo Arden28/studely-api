@@ -10,14 +10,15 @@ class Question extends Model
     use HasFactory;
 
     protected $fillable = [
-        'tenant_id','assessment_id','type','stem','difficulty','topic','tags'
+        'tenant_id', 'module_id','type','stem','difficulty','topic','tags'
     ];
     protected $casts = [
         'tags'=>'array'
     ];
 
-    public function assessment(){
-         return $this->belongsTo(Assessment::class);
+    public function module()
+    {
+        return $this->belongsTo(Module::class);
     }
 
     public function options(){

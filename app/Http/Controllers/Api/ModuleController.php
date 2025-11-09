@@ -14,7 +14,7 @@ class ModuleController extends Controller
     public function index()
     {
         $tid = app('tenant.id');
-        $q = Module::where('tenant_id',$tid)->withCount('assessments')->latest()->paginate(20);
+        $q = Module::where('tenant_id',$tid)->latest()->paginate(20);
         return ModuleResource::collection($q);
     }
 
@@ -28,7 +28,7 @@ class ModuleController extends Controller
     public function show($id)
     {
         $tid = app('tenant.id');
-        $m = Module::where('tenant_id',$tid)->withCount('assessments')->findOrFail($id);
+        $m = Module::where('tenant_id',$tid)->findOrFail($id);
         return new ModuleResource($m);
     }
 
