@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\{
   AuthController, OtpController, TenantController, StudentController, StudentImportController,
   ModuleController, AssessmentController, QuestionController, QuestionOptionController,
-  AttemptController, CollegeController, EvaluationController, ReportController,
+  AttemptController, CollegeController, DashboardController, EvaluationController, ReportController,
     RubricController
 };
 use App\Http\Middleware\ScopeTenant;
@@ -22,6 +22,9 @@ Route::prefix('v1')->group(function () {
 
         // User
         Route::get('user', [AuthController::class, 'me']);
+
+        // Student dashboard
+        Route::get('dashboard/student', [DashboardController::class, 'student']);
 
         // Tenants (SuperAdmin only)
         Route::apiResource('tenants', TenantController::class)->middleware('role:SuperAdmin');
@@ -47,8 +50,10 @@ Route::prefix('v1')->group(function () {
         Route::delete('options/{id}', [QuestionOptionController::class, 'destroy']);
 
         // Attempts (student)
-        Route::post('assessments/{id}/attempts', [AttemptController::class, 'start']);
-        Route::post('attempts/{id}/save', [AttemptController::class, 'saveProgress']);
+        Route::post('assessments/{id}/attempts', [AttemptController::class, 'start']);      // old explicit
+        Route::post('assessment/attempt',        [AttemptController::class, 'startCurrent']); // new auto
+
+        Route::post('attempts/{id}/save',   [AttemptController::class, 'saveProgress']);
         Route::post('attempts/{id}/submit', [AttemptController::class, 'submit']);
 
         // Evaluation (evaluator)

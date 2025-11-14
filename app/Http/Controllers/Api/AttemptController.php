@@ -12,6 +12,12 @@ use Illuminate\Support\Facades\DB;
 
 class AttemptController extends Controller
 {
+    /**
+     * OLD: explicit start by assessment id
+     * POST /v1/assessments/{id}/attempts
+     *
+     * (kept for admin / direct links)
+     */
     public function start(Request $r, $assessmentId)
     {
         $user = $r->user(); // same as Auth::user(), cleaner
@@ -19,7 +25,7 @@ class AttemptController extends Controller
             abort(401, 'Unauthenticated');
         }
 
-        $tid = $user->tenant_id;
+        $tid     = $user->tenant_id;
         $student = $user->student;
 
         if (!$student) {
@@ -48,13 +54,136 @@ class AttemptController extends Controller
             ]
         );
 
-        // Load relations for resource
         $attempt->load([
             'assessment.modules.questions.options',
-            'responses', // so you can later prefill answers if needed
+            'responses',
         ]);
 
         return new AttemptResource($attempt);
+    }
+
+    /**
+     * NEW: start "the right" assessment for this student.
+     *
+     * POST /v1/assessment/attempt
+     *
+     * Uses Baseline/Final + programme stage:
+     * - if baseline not started → baseline
+     * - if baseline in progress → baseline
+     * - if baseline done & final not started → final
+     * - if final in progress → final
+     * - if everything done → 409 "Programme already completed"
+     */
+    public function startCurrent(Request $r)
+    {
+        $user = $r->user();
+        if (!$user) {
+            abort(401, 'Unauthenticated');
+        }
+
+        $tid     = $user->tenant_id;
+        $student = $user->student;
+
+        if (!$student) {
+            abort(403, 'Only students can start attempts');
+        }
+
+        // Load all assessments for this tenant
+        $assessments = Assessment::where('tenant_id', $tid)
+            ->with([
+                'modules' => function ($q) {
+                    $q->orderBy('order');
+                },
+                'modules.questions.options',
+            ])
+            ->orderBy('id')
+            ->get();
+
+        if ($assessments->isEmpty()) {
+            abort(404, 'No assessments configured for this tenant');
+        }
+
+        // Identify Baseline & Final (by title, fallback to order)
+        $baseline = $assessments->firstWhere('title', 'like', '%Baseline%')
+            ?? $assessments->first();
+        $final = $assessments->firstWhere('title', 'like', '%Final%')
+            ?? ($assessments->count() > 1 ? $assessments->get(1) : null);
+
+        // Load existing attempts for this student
+        $attempts = Attempt::where('tenant_id', $tid)
+            ->where('student_id', $student->id)
+            ->get()
+            ->keyBy('assessment_id');
+
+        $baselineAttempt = $baseline ? $attempts->get($baseline->id) : null;
+        $finalAttempt    = $final ? $attempts->get($final->id)    : null;
+
+        // Compute stage (same as dashboard)
+        $stage = $this->computeStage($baselineAttempt, $finalAttempt);
+
+        // Decide which assessment is "current"
+        $assessment = null;
+        switch ($stage) {
+            case 'baseline_not_started':
+            case 'baseline_in_progress':
+                $assessment = $baseline;
+                break;
+            case 'final_not_started':
+            case 'final_in_progress':
+                $assessment = $final;
+                break;
+            case 'completed':
+                abort(409, 'Programme already completed.');
+            default:
+                $assessment = $baseline ?? $assessments->first();
+        }
+
+        if (!$assessment) {
+            abort(404, 'No assessment available for your stage.');
+        }
+
+        // Single attempt per assessment & student
+        $attempt = Attempt::firstOrCreate(
+            [
+                'tenant_id'     => $tid,
+                'assessment_id' => $assessment->id,
+                'student_id'    => $student->id,
+            ],
+            [
+                'started_at' => now(),
+            ]
+        );
+
+        $attempt->load([
+            'assessment.modules.questions.options',
+            'responses',
+        ]);
+
+        return new AttemptResource($attempt);
+    }
+
+    /**
+     * Shared stage logic (same idea as in DashboardController).
+     */
+    protected function computeStage(?Attempt $baselineAttempt, ?Attempt $finalAttempt): string
+    {
+        if (!$baselineAttempt) {
+            return 'baseline_not_started';
+        }
+
+        if ($baselineAttempt && !$baselineAttempt->submitted_at) {
+            return 'baseline_in_progress';
+        }
+
+        if ($baselineAttempt && $baselineAttempt->submitted_at && !$finalAttempt) {
+            return 'final_not_started';
+        }
+
+        if ($finalAttempt && !$finalAttempt->submitted_at) {
+            return 'final_in_progress';
+        }
+
+        return 'completed';
     }
 
     public function saveProgress(SaveProgressRequest $req, $attemptId)
@@ -69,12 +198,10 @@ class AttemptController extends Controller
 
         $attempt = Attempt::where('tenant_id', $tid)->findOrFail($attemptId);
 
-        // Ensure this attempt belongs to the current student's tenant/user
         if ($user->student && $attempt->student_id !== $user->student->id) {
             abort(403, 'You cannot modify this attempt');
         }
 
-        // Question belongs to a module → assessment
         $q = Question::where('tenant_id', $tid)
             ->with('module')
             ->findOrFail($data['question_id']);
@@ -122,7 +249,6 @@ class AttemptController extends Controller
             $score = 0;
 
             foreach ($attempt->responses as $resp) {
-                // MCQ scoring: +1 per correct option
                 if (
                     $resp->question &&
                     $resp->question->type === 'MCQ' &&
