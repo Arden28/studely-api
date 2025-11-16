@@ -18,7 +18,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/otp/request', [AuthController::class, 'otpRequest']);
     Route::post('/otp/verify', [AuthController::class, 'otpVerify']);
 
-    Route::post('/colleges-list', [CollegeController::class, 'list']);
+    Route::get('/colleges-list', [CollegeController::class, 'list']);
 
     Route::middleware(['auth:sanctum', ScopeTenant::class])->group(function () {
 
