@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Mail\OtpCodeMail;
 use App\Models\OtpToken;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use App\Services\Sms\SmsSender;
+use Illuminate\Support\Facades\Mail;
 
 class OtpService
 {
@@ -35,9 +37,17 @@ class OtpService
         if ($channel === 'sms' && $this->sms) {
             $this->sms->send($identifier, "Your verification code is: {$code}. It expires in {$ttlMinutes} minutes.");
         }
-        // For email channel, you can integrate Mail later. For dev, log it:
+
         if ($channel === 'email') {
-            logger()->info("OTP for {$identifier}: {$code}. It expires in {$ttlMinutes} minutes.");
+            // $identifier is the email address here
+            Mail::to($identifier)->send(
+                new OtpCodeMail($code, $ttlMinutes, $purpose)
+            );
+
+            // Optional: still log in local for debugging
+            if (app()->environment('local')) {
+                logger()->info("OTP for {$identifier}: {$code}. It expires in {$ttlMinutes} minutes.");
+            }
         }
     }
 
