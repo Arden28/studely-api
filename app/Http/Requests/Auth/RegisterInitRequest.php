@@ -26,7 +26,7 @@ class RegisterInitRequest extends FormRequest
         return [
             'full_name'        => ['required','string','max:255'],
             'institution_name' => ['required','string','max:255'],
-            'university_name'  => ['required','string','max:255'],
+            'university_id'    => ['required','integer','exists:colleges,id'],
             'mobile'           => ['required','string','max:30'], // E.164 preferred
             'email'            => ['required','email','max:255'],
             'gender'           => ['required','string','max:20'],

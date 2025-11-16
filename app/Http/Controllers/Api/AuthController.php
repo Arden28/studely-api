@@ -36,50 +36,53 @@ class AuthController extends Controller
             return response()->json(['message'=>'An account with this mobile already exists.'], 422);
         }
         if (Student::where('reg_no', $data['reg_no'])->exists()) {
-            // you may allow multiple attempts before verification; block only if linked user is registered
-            // optional strictness here
+            // optional: extra strictness if needed
         }
 
         // Store pending payload (hash password here; never keep plain text)
         $payload = [
             'user' => [
-                'name'  => $data['full_name'],
-                'email' => $data['email'],
-                'phone' => $data['mobile'],
+                'name'          => $data['full_name'],
+                'email'         => $data['email'],
+                'phone'         => $data['mobile'],
                 'password_hash' => Hash::make($data['password']),
             ],
             'student' => [
-                // 'full_name'        => $data['full_name'],
-                'institution_name' => $data['institution_name'],
-                'university_name'  => $data['university_name'],
-                'gender'           => $data['gender'],
-                'dob'              => $data['dob'],
-                'admission_year'   => $data['admission_year'],
-                'current_semester' => $data['current_semester'],
-                'reg_no'           => $data['reg_no'],
+                // The "university" is now a FK to colleges.id
+                'college_id'        => $data['university_id'],
+                'institution_name'  => $data['institution_name'],
+                'gender'            => $data['gender'],
+                'dob'               => $data['dob'],
+                'admission_year'    => $data['admission_year'],
+                'current_semester'  => $data['current_semester'],
+                'reg_no'            => $data['reg_no'],
             ],
         ];
 
-        $this->regCache->put($data['email'], $payload, (int)config('auth.otp_ttl', 10));
+        $this->regCache->put(
+            $data['email'],
+            $payload,
+            (int) config('auth.otp_ttl', 10)
+        );
 
-        // Send OTP to mobile
+        // Send OTP to email
         $this->otp->request(
             channel: 'email',
             identifier: $data['email'],
             purpose: 'register',
-            ttlMinutes: (int)config('auth.otp_ttl', 10),
-            digits: (int)config('auth.otp_digits', 6)
+            ttlMinutes: (int) config('auth.otp_ttl', 10),
+            digits: (int) config('auth.otp_digits', 6)
         );
 
         return response()->json(['message' => 'otp_sent']);
     }
 
+
     /** POST /api/v1/register/complete */
     public function registerComplete(RegisterCompleteRequest $request)
     {
-        // $mobile = $request->validated()['mobile'];
         $email = $request->validated()['email'];
-        $otp    = $request->validated()['otp'];
+        $otp   = $request->validated()['otp'];
 
         $verified = $this->otp->verify(
             channel: 'email',
@@ -100,27 +103,29 @@ class AuthController extends Controller
 
         DB::beginTransaction();
         try {
-            // 1) Create the user (fail if email/phone already taken)
+            // 1) Create the user
             $user = User::create([
                 'tenant_id'         => 1,
                 'name'              => $payload['user']['name'],
                 'email'             => $payload['user']['email'],
                 'phone'             => $payload['user']['phone'],
                 'password'          => $payload['user']['password_hash'],
-                'email_verified_at' => now(),   // only set here if OTP already verified
+                'email_verified_at' => now(),
                 'registered_at'     => now(),
             ]);
 
-            // 2) Create the student profile (one-to-one)
+            // 2) Create the student profile
             $user->student()->create([
-                'tenant_id'            => 1,
-                'reg_no'               => $payload['student']['reg_no'],
-                'institution_name'     => $payload['student']['institution_name'],
-                'university_name'      => $payload['student']['university_name'],
-                'gender'               => $payload['student']['gender'],
-                'dob'                  => $payload['student']['dob'],
-                'admission_year'       => $payload['student']['admission_year'],
-                'current_semester'     => $payload['student']['current_semester'],
+                'tenant_id'        => 1,
+                'college_id'       => $payload['student']['college_id'],   // <— 🔥 new
+                'reg_no'           => $payload['student']['reg_no'],
+                'institution_name' => $payload['student']['institution_name'],
+                // keep university_name nullable / for legacy if you want:
+                'university_name'  => null,
+                'gender'           => $payload['student']['gender'],
+                'dob'              => $payload['student']['dob'],
+                'admission_year'   => $payload['student']['admission_year'],
+                'current_semester' => $payload['student']['current_semester'],
             ]);
 
             // 3) Optional role
@@ -149,12 +154,13 @@ class AuthController extends Controller
         } catch (Throwable $e) {
             Log::error('Register complete failed', [
                 'email' => $email,
-                'error'  => $e->getMessage(),
-                'trace'  => $e->getTraceAsString(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             return response()->json(['message' => 'registration_failed'], 500);
         }
     }
+
 
 
     /** POST /api/v1/login */

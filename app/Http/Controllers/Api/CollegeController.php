@@ -20,6 +20,13 @@ class CollegeController extends Controller
         return CollegeResource::collection($paginated);
     }
 
+    public function list(Request $request)
+    {
+        $paginated = College::latest()->paginate(20);
+
+        return CollegeResource::collection($paginated);
+    }
+
     public function store(StoreCollegeRequest $request)
     {
         $tid = Auth::user()?->tenant_id;
