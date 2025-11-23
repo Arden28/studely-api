@@ -75,7 +75,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('rubrics/criteria/{id}', [RubricController::class,'destroyCriterion']);
 
         // Reports
-        Route::get('reports/student/{studentId}', [ReportController::class, 'student']);
         Route::get('reports/overview', [ReportController::class, 'overview']);
+        Route::get('reports/student/{id}', [ReportController::class, 'student']);
     });
 });

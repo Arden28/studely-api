@@ -8,6 +8,7 @@ use App\Http\Requests\Modules\UpdateModuleRequest;
 use App\Http\Resources\ModuleResource;
 use App\Models\Module;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ModuleController extends Controller
 {
@@ -28,6 +29,7 @@ class ModuleController extends Controller
 
     public function store(StoreModuleRequest $req)
     {
+        Log::info('Creating module', ['data' => $req->validated()]);
         $tid = app('tenant.id');
         $module = Module::create($req->validated() + ['tenant_id' => $tid]);
 

@@ -14,6 +14,7 @@ return new class extends Migration {
             $table->string('difficulty')->nullable();
             $table->string('topic')->nullable();
             $table->json('tags')->nullable();
+            $table->integer('points')->default(1);
             $table->timestamps();
         });
 

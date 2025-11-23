@@ -26,6 +26,7 @@ class UpdateQuestionRequest extends FormRequest
             'difficulty' => ['sometimes','nullable','string'],
             'topic' => ['sometimes','nullable','string'],
             'tags' => ['sometimes','nullable','array'],
+            'points' => ['sometimes','integer'],
         ];
     }
 }

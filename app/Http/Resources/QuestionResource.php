@@ -17,11 +17,12 @@ class QuestionResource extends JsonResource
         return [
             'id'     => $this->id,
             'type'     => $this->type,      // "MCQ" | "ESSAY" | ...
-            'prompt'   => $this->stem,      // alias for frontend
+            'stem'   => $this->stem,      // alias for frontend
             'marks'    => $this->marks ?? null, // if you have it, else null
             'difficulty' => $this->difficulty,
             'topic'  => $this->topic,
             'tags'   => $this->tags,
+            'points'   => $this->points,
             'options'=> OptionResource::collection($this->whenLoaded('options')),
         ];
     }

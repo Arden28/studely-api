@@ -22,6 +22,7 @@ class StoreModuleRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'assessment_id' => ['required','integer','exists:assessments,id'],
             'title' => ['required','string'],
             'code'  => ['nullable','string'],
             'start_at' => ['nullable','date'],

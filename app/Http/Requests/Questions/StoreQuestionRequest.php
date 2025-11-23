@@ -28,6 +28,7 @@ class StoreQuestionRequest extends FormRequest
             'difficulty' => ['nullable','string'],
             'topic' => ['nullable','string'],
             'tags' => ['nullable','array'],
+            'points' => ['nullable','integer'],
             'options' => ['nullable','array'], // for MCQ
             'options.*.label' => ['required_with:options','string'],
             'options.*.is_correct' => ['boolean'],

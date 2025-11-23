@@ -10,10 +10,11 @@ class Question extends Model
     use HasFactory;
 
     protected $fillable = [
-        'tenant_id', 'module_id','type','stem','difficulty','topic','tags'
+        'tenant_id', 'module_id','type','stem','difficulty','topic','tags', 'points'
     ];
     protected $casts = [
-        'tags'=>'array'
+        'tags'=>'array',
+        'points'=>'integer'
     ];
 
     public function module()
