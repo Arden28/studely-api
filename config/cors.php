@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:5173', 'https://studely-client.vercel.app'],
+    'allowed_origins' => ['http://localhost:5173', 'https://studely-client.vercel.app', 'https://app.focillionglobal.in'],
 
     'allowed_origins_patterns' => [],
 
