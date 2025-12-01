@@ -13,7 +13,8 @@ return new class extends Migration {
             $table->timestamp('started_at');
             $table->timestamp('submitted_at')->nullable();
             $table->integer('duration_sec')->default(0);
-            $table->decimal('score',6,2)->default(0);
+            $table->decimal('score',6,2)->default(1);
+            $table->decimal('total_marks',6,2)->default(1);
             $table->timestamps();
             $table->unique(['assessment_id','student_id']);
         });

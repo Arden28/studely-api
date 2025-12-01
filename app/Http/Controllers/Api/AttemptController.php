@@ -226,8 +226,8 @@ class AttemptController extends Controller
 
     public function submit(Request $r, $attemptId)
     {
-        $tid   = app('tenant.id');
-        $user  = $r->user();
+        $tid  = app('tenant.id');
+        $user = $r->user();
 
         if (!$user) {
             abort(401, 'Unauthenticated');
@@ -236,8 +236,8 @@ class AttemptController extends Controller
         $attempt = Attempt::where('tenant_id', $tid)
             ->with([
                 'responses.option',
-                'responses.question',
-                'assessment',
+                'responses.question.options',
+                'assessment', // Ensure this is loaded to access total_mark & passing_percentage
             ])
             ->findOrFail($attemptId);
 
@@ -248,18 +248,62 @@ class AttemptController extends Controller
         DB::transaction(function () use ($attempt) {
             $score = 0;
 
+            // --- 1. Calculate Score ---
             foreach ($attempt->responses as $resp) {
-                if (
-                    $resp->question &&
-                    $resp->question->type === 'MCQ' &&
-                    $resp->option &&
-                    $resp->option->is_correct
-                ) {
-                    $score += 1;
+                $q = $resp->question;
+                if (!$q) continue;
+
+                $points = $q->points ?? 0;
+                $isCorrect = false;
+
+                switch ($q->type) {
+                    case 'MCQ':
+                    case 'BOOLEAN':
+                        if ($resp->option && $resp->option->is_correct) {
+                            $isCorrect = true;
+                        }
+                        break;
+                    case 'TEXT':
+                        if ($resp->text_answer) {
+                            $correctOption = $q->options->where('is_correct', true)->first();
+                            if ($correctOption) {
+                                $userAns = trim(strtolower($resp->text_answer));
+                                $correctAns = trim(strtolower($correctOption->text));
+                                if ($userAns === $correctAns) $isCorrect = true;
+                            }
+                        }
+                        break;
+                }
+
+                if ($isCorrect) {
+                    $score += $points;
                 }
             }
 
+            // --- 2. Calculate Status (Pass/Fail) ---
+            // $totalPossible = $attempt->assessment->total_marks;
+            // $passingPercent = $attempt->assessment->passing_percentage ?? 0; // Default to 0 if not set
+
+            // // Default status
+            // $status = 'failed';
+
+            // if ($totalPossible > 0) {
+            //     // Calculate percentage with 2 decimal precision (optional)
+            //     $achievedPercent = ($score / $totalPossible) * 100;
+
+            //     if ($achievedPercent >= $passingPercent) {
+            //         $status = 'passed';
+            //     }
+            // } else {
+            //     // Edge case: Assessment has 0 total points (e.g. a survey).
+            //     // Usually we consider this 'passed' or just 'completed'.
+            //     $status = 'passed';
+            // }
+
+            // --- 3. Save ---
             $attempt->score        = $score;
+            // $attempt->status       = $status; // Ensure you have this column in DB
+            $attempt->total_marks = $attempt->assessment->total_marks ?? 1; // avoid div by zero
             $attempt->submitted_at = now();
             $attempt->save();
         });

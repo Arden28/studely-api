@@ -77,5 +77,7 @@ Route::prefix('v1')->group(function () {
         // Reports
         Route::get('reports/overview', [ReportController::class, 'overview']);
         Route::get('reports/student/{id}', [ReportController::class, 'student']);
+        Route::get('reports/search', [ReportController::class, 'search']);
+        Route::get('reports/attempts/{attemptId}', [ReportController::class, 'attemptDetails']);
     });
 });

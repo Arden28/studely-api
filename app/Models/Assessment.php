@@ -10,7 +10,7 @@ class Assessment extends Model
     use HasFactory;
 
     protected $fillable = [
-        'tenant_id','type','title','instructions','total_marks','is_active', 'open_at','close_at'
+        'tenant_id','type','title','instructions','total_marks','is_active', 'open_at','close_at', 'passing_percentage'
     ];
     protected $casts = [
         'open_at'=>'datetime',
