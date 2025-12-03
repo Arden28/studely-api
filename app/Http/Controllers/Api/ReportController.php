@@ -359,4 +359,28 @@ class ReportController extends Controller
             });
     }
 
+    /**
+     * POST /v1/reports/student/{id}/approve-final
+     */
+    public function approveFinal(Request $request, $studentId)
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        $student = Student::where('tenant_id', $tenantId)->findOrFail($studentId);
+
+        // Optional: specific validation to ensure they are in_training
+        if ($student->training_status !== 'in_training') {
+             return response()->json(['message' => 'Student is not currently in training.'], 400);
+        }
+
+        $student->update([
+            'training_status' => 'ready_for_final'
+        ]);
+
+        return response()->json([
+            'message' => 'Student approved for final assessment.',
+            'training_status' => 'ready_for_final'
+        ]);
+    }
+
 }

@@ -79,5 +79,6 @@ Route::prefix('v1')->group(function () {
         Route::get('reports/student/{id}', [ReportController::class, 'student']);
         Route::get('reports/search', [ReportController::class, 'search']);
         Route::get('reports/attempts/{attemptId}', [ReportController::class, 'attemptDetails']);
+        Route::post('reports/student/{id}/approve-final', [ReportController::class, 'approveFinal']);
     });
 });
