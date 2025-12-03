@@ -20,7 +20,7 @@ class AttemptController extends Controller
     private function getWorkflowIds($tenantId)
     {
         $assessments = Assessment::where('tenant_id', $tenantId)
-            ->orderBy('order', 'asc') // <--- UPDATED: Rely on 'order' column
+            ->orderBy('order', 'asc') // Rely on 'order' column
             ->orderBy('id', 'asc')    // Fallback for tie-breaking
             ->limit(2)
             ->pluck('id');
@@ -209,8 +209,15 @@ class AttemptController extends Controller
             }
 
             // 2. Save Attempt
+
+            // Calculate dynamic total marks based on the sum of points of questions in this assessment
+            $totalPossible = DB::table('questions')
+                ->join('modules', 'questions.module_id', '=', 'modules.id')
+                ->where('modules.assessment_id', $attempt->assessment_id)
+                ->sum('points');
+
             $attempt->score = $score;
-            $attempt->total_marks = $attempt->assessment->total_marks ?? 1;
+            $attempt->total_marks = $totalPossible > 0 ? $totalPossible : 1; // Prevent div by zero
             $attempt->submitted_at = now();
             $attempt->save();
 
